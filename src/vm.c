@@ -385,6 +385,109 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   return 0;
 }
 
+
+// My code added here fro m protect and m unprotect
+
+int mprotect(void *addr, int len)
+{
+  struct proc *curproc = myproc();
+  pte_t *pte;
+  int i;
+  int int_add = (int) addr;
+
+  // check if not currently part of address space
+  if (len <= 0 || int_add + (len * PGSIZE) > curproc->sz)
+  {
+    panic("mprotect: addr must be a part of the adress space"); //taken from load vm
+    return -1;
+  }
+
+  // check if addr is not page alligned
+  if( int_add % PGSIZE != 0) 
+  {
+    panic("mprotect: addr must be page aligned"); //taken from load vm
+    return -1;
+  }
+    
+  // loop to got through each page table entry indicated by length and adress
+  for (i = int_add; i < (int_add + (len * PGSIZE)); i += PGSIZE)
+  {
+    if((pte = walkpgdir(curproc->pgdir, (void *) i, 0)) == 0)
+    {
+      panic("copyuvm: pte should exist");
+      return -1;
+    }
+      
+    // check to see if valid / used by usr (not kernel)
+    if((*pte & PTE_P) == 0)
+    {
+      panic("mprotect: page not present");
+      return -1;
+    }
+      
+    if((*pte & PTE_U) == 0)
+    {
+      panic("mportect: only kernel allowed to use this page");
+      return -1;
+    }
+
+    *pte &= ~PTE_W; // taken from clearpteu and modified
+  }
+
+  lcr3(V2P(curproc->pgdir)); //flush TLB
+  return 0;
+}
+
+
+int munprotect(void *addr, int len)
+{
+  struct proc *curproc = myproc();
+  pte_t *pte;
+  int i;
+  int int_add = (int) addr;
+
+  // check if not currently part of address space
+  if (len <= 0 || int_add + (len * PGSIZE) > curproc->sz)
+  {
+    panic("munprotect: addr must be a part of the adress space"); //taken from load vm
+    return -1;
+  }
+
+  // check if addr is not page alligned
+  if( int_add % PGSIZE != 0) 
+  {
+    panic("munprotect: addr must be page aligned"); //taken from load vm
+    return -1;
+  }
+    
+  // loop to got through each page table entry indicated by length and adress
+  for (i = int_add; i < (int_add + (len * PGSIZE)); i += PGSIZE)
+  {
+    if((pte = walkpgdir(curproc->pgdir, (void *) i, 0)) == 0)
+    {
+      panic("munprotect: pte should exist");
+      return -1;
+    }
+      
+    // check to see if valid / used by usr (not kernel)
+    if((*pte & PTE_P) == 0)
+    {
+      panic("munprotect: page not present");
+      return -1;
+    }
+      
+    if((*pte & PTE_U) == 0)
+    {
+      panic("munportect: only kernel allowed to use this page");
+      return -1;
+    }
+
+    *pte = *pte | PTE_W; // taken from clearpteu and modified
+  }
+
+  lcr3(V2P(curproc->pgdir)); //flush TLB take from switch uvm and modified 
+  return 0;
+}
 //PAGEBREAK!
 // Blank page.
 //PAGEBREAK!
